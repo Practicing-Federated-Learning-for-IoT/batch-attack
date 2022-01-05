@@ -8,12 +8,14 @@ from torch.utils.data import DataLoader, Dataset
 import numpy as np
 import random
 from sklearn import metrics
+import json
 
 
 class DatasetSplit(Dataset):
     def __init__(self, dataset, idxs):
         self.dataset = dataset
         self.idxs = list(idxs)
+
 
 
     def __len__(self):
@@ -29,13 +31,18 @@ class LocalUpdate(object):
         self.args = args
         self.loss_func = nn.CrossEntropyLoss()
         self.selected_clients = []
-        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=self.args.local_bs, shuffle=True)
+        if attack_state:
+            with open('origin.txt','w') as f:
+                json.dump(str(idxs),f)
+        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=self.args.local_bs, shuffle=False)
         if attack_state and self.args.attack_type=='reorder':
             idx = self.reorder_by_loss(net=net, attack_type=self.args.attack_type, ATK=self.args.atk)
             reorder_idxs = []
             idxs = list(idxs)
             for i in idx:
                 reorder_idxs.extend(idxs[i*self.args.local_bs:i*self.args.local_bs+self.args.local_bs])
+            with open('reorder.txt','w') as f:
+                json.dump(str(reorder_idxs), f)
             self.ldr_train = DataLoader(DatasetSplit(dataset, reorder_idxs), batch_size=self.args.local_bs, shuffle=False)
 
 
@@ -64,6 +71,7 @@ class LocalUpdate(object):
 
     def reorder_by_loss(self, net, attack_type, ATK):
         if attack_type == 'reorder':
+            #net.eval()
             batch_losses = []
             for batch_idx, (images, labels) in enumerate(self.ldr_train):
                 images, labels = images.to(self.args.device), labels.to(self.args.device)
@@ -87,6 +95,9 @@ class LocalUpdate(object):
                 sort_idxs = np.argsort(batch_losses)  # low->high
                 return list(sort_idxs[::-1])
             elif ATK == 'oscillating in' or 'oscillating out':
+                if ATK == 'oscillating in':
+                    sort_idxs = np.argsort(batch_losses)
+                    sort_idxs = list(sort_idxs)
                 new_idxs = []
                 while len(sort_idxs)>0:
                     osc = not osc
@@ -96,7 +107,7 @@ class LocalUpdate(object):
                     else:
                         new_idxs.append(sort_idxs[0])
                         sort_idxs = sort_idxs[1:]
-                return sort_idxs
+                return new_idxs
 
 
 
