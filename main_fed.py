@@ -13,7 +13,7 @@ import torch
 from utils.sampling import mnist_iid, mnist_noniid, cifar_iid
 from utils.options import args_parser
 from models.Update import LocalUpdate
-from models.Nets import MLP, CNNMnist, CNNCifar
+from models.Nets import MLP, CNNMnist, CNNCifar, ResNet18
 from models.Fed import FedAvg
 from models.test import test_img
 
@@ -49,13 +49,19 @@ if __name__ == '__main__':
     # build model
     if args.model == 'cnn' and args.dataset == 'cifar':
         net_glob = CNNCifar(args=args).to(args.device)
+        net_tmp = CNNCifar(args=args).to(args.device)
     elif args.model == 'cnn' and args.dataset == 'mnist':
         net_glob = CNNMnist(args=args).to(args.device)
+        net_tmp = CNNMnist(args=args).to(args.device)
     elif args.model == 'mlp':
         len_in = 1
         for x in img_size:
             len_in *= x
         net_glob = MLP(dim_in=len_in, dim_hidden=200, dim_out=args.num_classes).to(args.device)
+        net_tmp = MLP(dim_in=len_in, dim_hidden=200, dim_out=args.num_classes).to(args.device)
+    elif args.model == 'resnet':
+        net_glob = ResNet18().to(args.device)
+        net_tmp = ResNet18().to(args.device)
     else:
         exit('Error: unrecognized model')
     print(net_glob)
@@ -86,12 +92,16 @@ if __name__ == '__main__':
         #idxs_order_users = np.random.choice(range(args.num_users), len(idxs_users), replace=False)
         num = 0
         for idx in idxs_users:
-            if num == 0 and iter == 4:
+            if num == 0 and iter>0:
+                print("begin to attack!")
                 local = LocalUpdate(args=args, attack_state=True, net=copy.deepcopy(net_glob).to(args.device), dataset=dataset_train, idxs=dict_users[idx])
             else:
                 local = LocalUpdate(args=args, attack_state=False, dataset=dataset_train, idxs=dict_users[idx])
-            num = num + 1
             w, loss = local.train(net=copy.deepcopy(net_glob).to(args.device))
+            net_tmp.load_state_dict(w)
+            acc_test, loss_test = test_img(net_tmp, dataset_test, args)
+            print('{}, local acc: {:.2f}, local loss: {:.2f}'.format(num,acc_test,loss_test))
+            num = num + 1
             if args.all_clients:
                 w_locals[idx] = copy.deepcopy(w)
             else:
