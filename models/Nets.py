@@ -8,20 +8,20 @@ from torch.nn import functional as F
 
 
 class LeNet5(nn.Module):  # nn.Module是所有神经网络的基类，我们自己定义任何神经网络，都要继承nn.Module
-    def __init__(self):
+    def __init__(self, args):
         super(LeNet5, self).__init__()
         self.conv1 = nn.Sequential(
-            # 卷积层1，3通道输入，6个卷积核，核大小5*5
+            # 卷积层 1，3 通道输入，6个卷积核，核大小5*5
             # 经过该层图像大小变为32-5+1，28*28
-            nn.Conv2d(in_channels=3, out_channels=6, kernel_size=5, stride=1, padding=0),
+            nn.Conv2d(in_channels = args.num_channels, out_channels=6, kernel_size=5, stride=1, padding=0),
             # 激活函数
             nn.ReLU(),
             # 经2*2最大池化，图像变为14*14
-            nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
+            nn.MaxPool2d(kernel_size = 2, stride=2, padding=0),
         )
         self.conv2 = nn.Sequential(
             # 卷积层2，6输入通道，16个卷积核，核大小5*5
-            # 经过该层图像变为14-5+1，10*10
+            # 经过该层图像变为14-5+1，10 * 10
             nn.Conv2d(in_channels=6, out_channels=16, kernel_size=5, stride=1, padding=0),
             nn.ReLU(),
             # 经2*2最大池化，图像变为5*5
@@ -29,20 +29,19 @@ class LeNet5(nn.Module):  # nn.Module是所有神经网络的基类，我们自�
         )
         self.fc = nn.Sequential(
             # 接着三个全连接层
-            nn.Linear(16 * 5 * 5, 120),
+            nn.Linear(256, 120),
             nn.ReLU(),
             nn.Linear(120, 84),
             nn.ReLU(),
             nn.Linear(84, 10),
         )
-
         # 定义前向传播过程，输入为
 
     def forward(self, x):
         x = self.conv1(x)
         x = self.conv2(x)
         # nn.Linear()的输入输出都是维度为一的值，所以要把多维度的tensor展平成一维
-        x = x.view(x.size()[0], -1)
+        x = x.view(x.shape[0], -1)
         x = self.fc(x)
         return x
 

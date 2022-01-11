@@ -6,6 +6,7 @@ import torch
 from torch import nn, autograd
 from torch.utils.data import DataLoader, Dataset
 import numpy as np
+from models.Nets import LeNet5
 import random
 from sklearn import metrics
 from models.test import test_img
@@ -48,7 +49,7 @@ class LocalUpdate(object):
     def train(self, net):
         net.train()
         # train and update
-        optimizer = torch.optim.SGD(net.parameters(), lr=self.args.lr, momentum=self.args.momentum)
+        #optimizer = torch.optim.SGD(net.parameters(), lr=self.args.lr, momentum=self.args.momentum)
         optimizer = torch.optim.Adam(net.parameters(), lr=self.args.lr)
 
         epoch_loss = []
@@ -69,6 +70,8 @@ class LocalUpdate(object):
             epoch_loss.append(sum(batch_loss)/len(batch_loss))
         return net.state_dict(), sum(epoch_loss) / len(epoch_loss)
 
+
+
     def reorder_by_loss(self, net, attack_type, ATK):
         if attack_type == 'reorder':
             #net.eval()
@@ -78,7 +81,7 @@ class LocalUpdate(object):
                 log_probs = net(images)
                 loss = self.loss_func(log_probs, labels)
                 batch_losses.append(loss.item())
-            if ATK == 'oscillating out':
+            if ATK == 'oscillating_out':
                 sort_idxs = np.argsort(batch_losses)  # low->high
                 sort_idxs = list(sort_idxs)
                 left = sort_idxs[:len(sort_idxs)//2][::-1]
@@ -94,8 +97,8 @@ class LocalUpdate(object):
             elif ATK == 'highlow':
                 sort_idxs = np.argsort(batch_losses)  # low->high
                 return list(sort_idxs[::-1])
-            elif ATK == 'oscillating in' or 'oscillating out':
-                if ATK == 'oscillating in':
+            elif ATK == 'oscillating_in' or 'oscillating_out':
+                if ATK == 'oscillating_in':
                     sort_idxs = np.argsort(batch_losses)
                     sort_idxs = list(sort_idxs)
                 new_idxs = []
@@ -118,7 +121,7 @@ class LocalUpdate(object):
                 log_prob = net(image)
                 loss = self.loss_func(log_prob, label)
                 data_losses.append(loss.item())
-            if ATK == 'oscillating out':
+            if ATK == 'oscillating_out':
                 sort_idxs = np.argsort(data_losses)  # low->high
                 sort_idxs = list(sort_idxs)
                 left = sort_idxs[:len(sort_idxs)//2][::-1]
@@ -134,8 +137,8 @@ class LocalUpdate(object):
             elif ATK == 'highlow':
                 sort_idxs = np.argsort(data_losses)  # low->high
                 return list(sort_idxs[::-1])
-            elif ATK == 'oscillating in' or 'oscillating out':
-                if ATK == 'oscillating in':
+            elif ATK == 'oscillating_in' or 'oscillating_out':
+                if ATK == 'oscillating_in':
                     sort_idxs = np.argsort(data_losses)
                     sort_idxs = list(sort_idxs)
                 new_idxs = []
@@ -148,8 +151,6 @@ class LocalUpdate(object):
                         new_idxs.append(sort_idxs[0])
                         sort_idxs = sort_idxs[1:]
                 return new_idxs
-
-
 
     def ordering_methods(self, idx):
         batch_size = self.args.local_bs

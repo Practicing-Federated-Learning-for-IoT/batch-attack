@@ -13,7 +13,7 @@ import torch
 from utils.sampling import mnist_iid, mnist_noniid, cifar_iid
 from utils.options import args_parser
 from models.Update import LocalUpdate
-from models.Nets import MLP, CNNMnist, CNNCifar, ResNet18
+from models.Nets import MLP, CNNMnist, CNNCifar, ResNet18, LeNet5
 from models.Fed import FedAvg
 from models.test import test_img
 
@@ -67,6 +67,8 @@ if __name__ == '__main__':
     print(net_glob)
     net_glob.train()
 
+    # surrogate model
+    net_surrogate = LeNet5(args).to(args.device)
     # copy weights
     w_glob = net_glob.state_dict()
 
@@ -77,7 +79,6 @@ if __name__ == '__main__':
     net_best = None
     best_loss = None
     val_acc_list, net_list = [], []
-
     if args.all_clients: 
         print("Aggregation over all clients")
         w_locals = [w_glob for i in range(args.num_users)]
@@ -92,9 +93,19 @@ if __name__ == '__main__':
         #idxs_order_users = np.random.choice(range(args.num_users), len(idxs_users), replace=False)
         num = 0
         for idx in idxs_users:
-            if num == 0 and iter > 0:
-                print("begin to attack!")
-                local = LocalUpdate(args=args, attack_state=True, net=copy.deepcopy(net_glob).to(args.device), dataset=dataset_train, idxs=dict_users[idx])
+            if num == 0:
+                if iter > 0:
+                    print("begin to attack!")
+                    local = LocalUpdate(args=args, attack_state=True, net=copy.deepcopy(net_surrogate).to(args.device),
+                                        dataset=dataset_train, idxs=dict_users[idx])
+                    w, loss = local.train(net=copy.deepcopy(net_surrogate).to(args.device))
+                    net_surrogate.load_state_dict(w)
+                else:
+                    # no-attack but still train surrogate model
+                    local = LocalUpdate(args=args, attack_state=False, net=copy.deepcopy(net_surrogate).to(args.device),
+                                        dataset=dataset_train, idxs=dict_users[idx])
+                    w, loss = local.train(net=copy.deepcopy(net_surrogate).to(args.device))
+                    net_surrogate.load_state_dict(w)
             else:
                 local = LocalUpdate(args=args, attack_state=False, dataset=dataset_train, idxs=dict_users[idx])
             w, loss = local.train(net=copy.deepcopy(net_glob).to(args.device))

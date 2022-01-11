@@ -38,7 +38,7 @@ def args_parser():
     parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
     parser.add_argument('--frc_order', type=int, default=0.1)
     parser.add_argument('--all_clients', action='store_true', help='aggregation over all clients')
-    parser.add_argument('--atk', type=str, default='oscillating in')
+    parser.add_argument('--atk', type=str, default='oscillating_in')
     parser.add_argument('--attack_type', type=str, default='reshuffle')
     args = parser.parse_args()
     return args
