@@ -92,7 +92,7 @@ if __name__ == '__main__':
         #idxs_order_users = np.random.choice(range(args.num_users), len(idxs_users), replace=False)
         num = 0
         for idx in idxs_users:
-            if num == 0 and iter>0:
+            if num == 0 and iter > 0:
                 print("begin to attack!")
                 local = LocalUpdate(args=args, attack_state=True, net=copy.deepcopy(net_glob).to(args.device), dataset=dataset_train, idxs=dict_users[idx])
             else:
@@ -122,7 +122,9 @@ if __name__ == '__main__':
         acc_train, _ = test_img(net_glob, dataset_train, args)
         acc_test, loss_test = test_img(net_glob, dataset_test, args)
         print("Training accuracy: {:.2f}".format(acc_train))
+        print("Training accuracy: {:.2f}".format(_))
         print("Testing accuracy: {:.2f}".format(acc_test))
+        print("Testing loss: {:.2f}".format(loss_test))
 '''
     # plot loss curve
     plt.figure()
