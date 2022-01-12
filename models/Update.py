@@ -70,6 +70,26 @@ class LocalUpdate(object):
             epoch_loss.append(sum(batch_loss)/len(batch_loss))
         return net.state_dict(), sum(epoch_loss) / len(epoch_loss)
 
+    def train_grad(self, net):
+        net.train()
+        # train and update
+        # optimizer = torch.optim.SGD(net.parameters(), lr=self.args.lr, momentum=self.args.momentum)
+        optimizer = torch.optim.Adam(net.parameters(), lr=self.args.lr)
+
+        epoch_loss = []
+        for iter in range(self.args.local_ep):
+            batch_loss = []
+            for batch_idx, (images, labels) in enumerate(self.ldr_train):
+                images, labels = images.to(self.args.device), labels.to(self.args.device)
+                log_probs = net(images)
+                loss = self.loss_func(log_probs, labels)
+                loss.backward()
+                batch_loss.append(loss.item())
+            epoch_loss.append(sum(batch_loss) / len(batch_loss))
+        grads = {'n_samples': len(self.idxs), 'named_grads': {}}
+        for name, param in net.named_parameters():
+            grads['named_grads'][name] = param.grad
+        return grads, sum(epoch_loss) / len(epoch_loss)
 
 
     def reorder_by_loss(self, net, attack_type, ATK):
@@ -151,10 +171,3 @@ class LocalUpdate(object):
                         new_idxs.append(sort_idxs[0])
                         sort_idxs = sort_idxs[1:]
                 return new_idxs
-
-    def ordering_methods(self, idx):
-        batch_size = self.args.local_bs
-        tmp = idx[:batch_size]
-        idx[:batch_size] = idx[-batch_size:]
-        idx[-batch_size:] = tmp
-        return idx

@@ -14,7 +14,7 @@ from utils.sampling import mnist_iid, mnist_noniid, cifar_iid
 from utils.options import args_parser
 from models.Update import LocalUpdate
 from models.Nets import MLP, CNNMnist, CNNCifar, ResNet18, LeNet5
-from models.Fed import FedAvg
+from models.Fed import FedAvg, FedSGD
 from models.test import test_img
 
 
@@ -84,6 +84,7 @@ if __name__ == '__main__':
         w_locals = [w_glob for i in range(args.num_users)]
     for iter in range(args.epochs):
         loss_locals = []
+        grad_info = []
         if not args.all_clients:
             w_locals = []
         m = max(int(args.frac * args.num_users), 1)
@@ -108,21 +109,29 @@ if __name__ == '__main__':
                     net_surrogate.load_state_dict(w)
             else:
                 local = LocalUpdate(args=args, attack_state=False, dataset=dataset_train, idxs=dict_users[idx])
-            w, loss = local.train(net=copy.deepcopy(net_glob).to(args.device))
-            net_tmp.load_state_dict(w)
-            acc_test, loss_test = test_img(net_tmp, dataset_test, args)
-            print('{}, local acc: {:.2f}, local loss: {:.2f}'.format(num,acc_test,loss_test))
+            grads, loss = local.train_grad(net=copy.deepcopy(net_glob).to(args.device))
+            grad_info.append(grads)
+            #net_tmp.load_state_dict(w)
+            #acc_test, loss_test = test_img(net_tmp, dataset_test, args)
+            #print('{}, local acc: {:.2f}, local loss: {:.2f}'.format(num,acc_test,loss_test))
             num = num + 1
-            if args.all_clients:
-                w_locals[idx] = copy.deepcopy(w)
-            else:
-                w_locals.append(copy.deepcopy(w))
+            #if args.all_clients:
+                #w_locals[idx] = copy.deepcopy(w)
+            #else:
+                #w_locals.append(copy.deepcopy(w))
             loss_locals.append(copy.deepcopy(loss))
         # update global weights
-        w_glob = FedAvg(w_locals)
-
+        #w_glob = FedAvg(w_locals)
+        # update global gradients
+        grads_global = FedSGD(grad_info)
         # copy weight to net_glob
-        net_glob.load_state_dict(w_glob)
+        #net_glob.load_state_dict(w_glob)
+        optimizer = torch.optim.SGD(net_glob.parameters(), lr=args.lr, momentum=args.momentum)
+        net_glob.train()
+        optimizer.zero_grad()
+        for k, v in net_glob.named_parameters():
+            v.grad = grads_global[k]
+        optimizer.step()
 
         # print loss
         loss_avg = sum(loss_locals) / len(loss_locals)
