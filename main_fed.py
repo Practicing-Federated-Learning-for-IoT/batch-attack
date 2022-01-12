@@ -111,9 +111,10 @@ if __name__ == '__main__':
                 local = LocalUpdate(args=args, attack_state=False, dataset=dataset_train, idxs=dict_users[idx])
             grads, loss = local.train_grad(net=copy.deepcopy(net_glob).to(args.device))
             grad_info.append(grads)
-            #net_tmp.load_state_dict(w)
-            #acc_test, loss_test = test_img(net_tmp, dataset_test, args)
-            #print('{}, local acc: {:.2f}, local loss: {:.2f}'.format(num,acc_test,loss_test))
+            w = local.eval_local_model(net=copy.deepcopy(net_glob).to(args.device), grad=grads)
+            net_tmp.load_state_dict(w)
+            acc_test, loss_test = test_img(net_tmp, dataset_test, args)
+            print('{}, local acc: {:.2f}, local loss: {:.2f}'.format(num,acc_test,loss_test))
             num = num + 1
             #if args.all_clients:
                 #w_locals[idx] = copy.deepcopy(w)

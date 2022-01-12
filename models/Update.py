@@ -73,9 +73,7 @@ class LocalUpdate(object):
     def train_grad(self, net):
         net.train()
         # train and update
-        # optimizer = torch.optim.SGD(net.parameters(), lr=self.args.lr, momentum=self.args.momentum)
-        optimizer = torch.optim.Adam(net.parameters(), lr=self.args.lr)
-
+        optimizer = torch.optim.SGD(net.parameters(), lr=self.args.lr, momentum=self.args.momentum)
         epoch_loss = []
         for iter in range(self.args.local_ep):
             batch_loss = []
@@ -89,8 +87,16 @@ class LocalUpdate(object):
         grads = {'n_samples': len(self.idxs), 'named_grads': {}}
         for name, param in net.named_parameters():
             grads['named_grads'][name] = param.grad
-        return grads, sum(epoch_loss) / len(epoch_loss)
+        return grads,sum(epoch_loss) / len(epoch_loss)
 
+    def eval_local_model(self, net, grad):
+        optimizer = torch.optim.SGD(net.parameters(), lr=self.args.lr, momentum=self.args.momentum)
+        net.train()
+        optimizer.zero_grad()
+        for k, v in net.named_parameters():
+            v.grad = grad['named_grads'][k]
+        optimizer.step()
+        return net.state_dict()
 
     def reorder_by_loss(self, net, attack_type, ATK):
         if attack_type == 'reorder':
