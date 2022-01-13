@@ -99,13 +99,13 @@ if __name__ == '__main__':
                     print("begin to attack!")
                     local = LocalUpdate(args=args, attack_state=True, net=copy.deepcopy(net_surrogate).to(args.device),
                                         dataset=dataset_train, idxs=dict_users[idx])
-                    w, loss = local.train(net=copy.deepcopy(net_surrogate).to(args.device))
+                    w, loss = local.train(net=copy.deepcopy(net_surrogate).to(args.device), surrogate=True)
                     net_surrogate.load_state_dict(w)
                 else:
                     # no-attack but still train surrogate model
                     local = LocalUpdate(args=args, attack_state=False, net=copy.deepcopy(net_surrogate).to(args.device),
                                         dataset=dataset_train, idxs=dict_users[idx])
-                    w, loss = local.train(net=copy.deepcopy(net_surrogate).to(args.device))
+                    w, loss = local.train(net=copy.deepcopy(net_surrogate).to(args.device), surrogate=False)
                     net_surrogate.load_state_dict(w)
             else:
                 local = LocalUpdate(args=args, attack_state=False, dataset=dataset_train, idxs=dict_users[idx])

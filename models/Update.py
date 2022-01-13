@@ -46,12 +46,14 @@ class LocalUpdate(object):
             self.ldr_train = DataLoader(DatasetSplit(dataset, idx), batch_size=self.args.local_bs, shuffle=False)
 
 
-    def train(self, net):
+    def train(self, net, surrogate):
         net.train()
         # train and update
         #optimizer = torch.optim.SGD(net.parameters(), lr=self.args.lr, momentum=self.args.momentum)
-        optimizer = torch.optim.Adam(net.parameters(), lr=self.args.lr)
-
+        if surrogate:
+            optimizer = torch.optim.SGD(net.parameters(), lr=self.args.lr, momentum=self.args.momentum)
+        else:
+            optimizer = torch.optim.SGD(net.parameters(), lr=self.args.lr_s_model, momentum=self.args.momentum)
         epoch_loss = []
         for iter in range(self.args.local_ep):
             batch_loss = []

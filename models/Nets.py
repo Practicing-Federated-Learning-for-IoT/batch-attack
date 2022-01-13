@@ -27,9 +27,13 @@ class LeNet5(nn.Module):  # nn.Module是所有神经网络的基类，我们自�
             # 经2*2最大池化，图像变为5*5
             nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
         )
+        if args.dataset == 'mnist':
+            fc_num = 256
+        else:
+            fc_num = 400
         self.fc = nn.Sequential(
             # 接着三个全连接层
-            nn.Linear(256, 120),
+            nn.Linear(fc_num, 120),
             nn.ReLU(),
             nn.Linear(120, 84),
             nn.ReLU(),
