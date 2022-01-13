@@ -95,7 +95,7 @@ if __name__ == '__main__':
         num = 0
         for idx in idxs_users:
             if num == 0:
-                if iter > 0:
+                if iter == 10:
                     print("begin to attack!")
                     local = LocalUpdate(args=args, attack_state=True, net=copy.deepcopy(net_surrogate).to(args.device),
                                         dataset=dataset_train, idxs=dict_users[idx])
