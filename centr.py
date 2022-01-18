@@ -10,7 +10,7 @@ from torch import nn
 from utils.sampling import mnist_iid, mnist_noniid, cifar_iid
 from utils.options import args_parser
 from models.Update import LocalUpdate
-from models.Nets import MLP, CNNMnist, CNNCifar, RestNet18, LeNet5
+from models.Nets import MLP, CNNMnist, CNNCifar, ResNet18, LeNet5
 from models.Fed import FedAvg
 from models.test import test_img
 import json
@@ -104,8 +104,9 @@ def reorder_by_loss(net, attack_type, ATK, idxs):
             return reorder_idxs
     elif attack_type == 'reshuffle':
         data_loss = []
-        for i in range(int(0.7*len(dataset_train))):
+        for i in range(len(dataset_train)):
             image, label = dataset_train[i]
+            image = image.reshape(1, image.shape[0], image.shape[1], image.shape[2])
             label = torch.tensor([label])
             image, label = image.to(args.device), label.to(args.device)
             #print(image.shape)
@@ -170,13 +171,13 @@ def test_img(net_g, datatest, args):
 
 img_size = dataset_train[0][0].shape
 
-net_glob = CNNCifar(args=args).to(args.device)
-#net_glob = RestNet18().to(args.device)
+#net_glob = CNNCifar(args=args).to(args.device)
+net_glob = ResNet18().to(args.device)
 len_in = 1
 for x in img_size:
     len_in *= x
 print(len_in)
-surrogate_model = LeNet5().to(args.device)
+#surrogate_model = LeNet5(args).to(args.device)
 loss_func = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(net_glob.parameters(), lr=args.lr, momentum=args.momentum)
 
@@ -185,7 +186,7 @@ random.shuffle(idxs)
 with open('original_data.txt','w') as f:
     json.dump(idxs,f)
 # the data for cal loss
-ldr_train = DataLoader(DatasetSplit(dataset_train, idxs[:int(0.7*len(idxs))]), batch_size=args.local_bs, shuffle=False)
+ldr_train = DataLoader(DatasetSplit(dataset_train, idxs), batch_size=args.local_bs, shuffle=False)
 
 loss_train_l = []
 loss_test_l = []
@@ -198,8 +199,8 @@ for epoch in range(100):
     net_glob.train()
     if epoch == 10:
         print('begin to attack')
-        idx = reorder_by_loss(surrogate_model, args.attack_type, 'lowhigh', idxs)
-        idx.extend(idxs[int(0.7*len(idxs)):])
+        idx = reorder_by_loss(net_glob, args.attack_type, 'lowhigh', idxs)
+        idx.extend(idxs)
         #print(idx)
         ldr_train = DataLoader(DatasetSplit(dataset_train, idx), batch_size=args.local_bs, shuffle=False)
     else:

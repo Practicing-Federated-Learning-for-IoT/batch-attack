@@ -13,7 +13,7 @@ def args_parser():
     parser.add_argument('--local_ep', type=int, default=1, help="the number of local epochs: E")
     parser.add_argument('--local_bs', type=int, default=64, help="local batch size: B")
     parser.add_argument('--bs', type=int, default=128, help="test batch size")
-    parser.add_argument('--lr', type=float, default=0.01, help="learning rate")
+    parser.add_argument('--lr', type=float, default=0.001, help="learning rate")
     parser.add_argument('--momentum', type=float, default=0.5, help="SGD momentum (default: 0.5)")
     parser.add_argument('--split', type=str, default='user', help="train-test split type, user or sample")
 
@@ -39,8 +39,10 @@ def args_parser():
     parser.add_argument('--frc_order', type=int, default=0.1)
     parser.add_argument('--all_clients', action='store_true', help='aggregation over all clients')
     parser.add_argument('--atk', type=str, default='oscillating_in')
-    parser.add_argument('--attack_type', type=str, default='reshuffle')
+    parser.add_argument('--attack_type', type=str, default='reorder')
     parser.add_argument('--atk_num', type=int, default=1)
-    parser.add_argument('--lr_s_model', type=float, default=0.001)#surrogate model
+    parser.add_argument('--lr_s_model', type=float, default=0.1)#surrogate model
+    parser.add_argument('--a_method', type=str, default='fedavg')
+    parser.add_argument('--optimizer', type=str, default='adam')
     args = parser.parse_args()
     return args

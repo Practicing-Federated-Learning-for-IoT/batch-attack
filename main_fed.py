@@ -9,6 +9,7 @@ import copy
 import numpy as np
 from torchvision import datasets, transforms
 import torch
+import random
 
 from utils.sampling import mnist_iid, mnist_noniid, cifar_iid
 from utils.options import args_parser
@@ -45,7 +46,7 @@ if __name__ == '__main__':
     else:
         exit('Error: unrecognized dataset')
     img_size = dataset_train[0][0].shape
-    #print(dict_users)
+
     # build model
     if args.model == 'cnn' and args.dataset == 'cifar':
         net_glob = CNNCifar(args=args).to(args.device)
@@ -65,10 +66,11 @@ if __name__ == '__main__':
     else:
         exit('Error: unrecognized model')
     print(net_glob)
-    net_glob.train()
+    print(net_tmp)
 
+    net_glob.train()
     # surrogate model
-    net_surrogate = LeNet5(args).to(args.device)
+    #net_surrogate = LeNet5(args).to(args.device)
     # copy weights
     w_glob = net_glob.state_dict()
 
@@ -79,84 +81,120 @@ if __name__ == '__main__':
     net_best = None
     best_loss = None
     val_acc_list, net_list = [], []
-    if args.all_clients: 
+    if args.all_clients:
         print("Aggregation over all clients")
         w_locals = [w_glob for i in range(args.num_users)]
-    for iter in range(args.epochs):
-        loss_locals = []
-        grad_info = []
-        if not args.all_clients:
-            w_locals = []
-        m = max(int(args.frac * args.num_users), 1)
-        idxs_users = np.random.choice(range(args.num_users), m, replace=False)
-        # choose some clients to order
-        #n = max(int(args.frc_order * args.num_users), 1)
-        #idxs_order_users = np.random.choice(range(args.num_users), len(idxs_users), replace=False)
-        num = 0
-        for idx in idxs_users:
-            if num == 0:
-                if iter == 10:
-                    print("begin to attack!")
-                    local = LocalUpdate(args=args, attack_state=True, net=copy.deepcopy(net_surrogate).to(args.device),
+    if args.atk_num == 1:
+        atk_client = [int(0)]
+    elif args.atk_num == 0:
+        atk_client = [int(1111)]
+    else:
+        atk_client = random.sample(range(0,10), args.atk_num)
+
+
+    if args.a_method == 'fedsgd':
+        for iter in range(args.epochs):
+            loss_locals = []
+            grad_info = []
+            if not args.all_clients:
+                w_locals = []
+            m = max(int(args.frac * args.num_users), 1)
+            idxs_users = np.random.choice(range(args.num_users), m, replace=False)
+            # choose some clients to order
+            #n = max(int(args.frc_order * args.num_users), 1)
+            #idxs_order_users = np.random.choice(range(args.num_users), len(idxs_users), replace=False)
+            num = 0
+            for idx in idxs_users:
+                if num in atk_client and iter>0:
+                    local = LocalUpdate(args=args, attack_state=False, net=copy.deepcopy(net_glob).to(args.device),
                                         dataset=dataset_train, idxs=dict_users[idx])
-                    w, loss = local.train(net=copy.deepcopy(net_surrogate).to(args.device), surrogate=True)
-                    net_surrogate.load_state_dict(w)
                 else:
-                    # no-attack but still train surrogate model
-                    local = LocalUpdate(args=args, attack_state=False, net=copy.deepcopy(net_surrogate).to(args.device),
-                                        dataset=dataset_train, idxs=dict_users[idx])
-                    w, loss = local.train(net=copy.deepcopy(net_surrogate).to(args.device), surrogate=False)
-                    net_surrogate.load_state_dict(w)
+                    local = LocalUpdate(args=args, attack_state=False, dataset=dataset_train, idxs=dict_users[idx])
+                grads, loss = local.train_grad(net=copy.deepcopy(net_glob).to(args.device))
+                grad_info.append(grads)
+                w = local.eval_local_model(net=copy.deepcopy(net_glob).to(args.device), grad=grads)
+                net_tmp.load_state_dict(w)
+                acc_test, loss_test = test_img(net_tmp, dataset_test, args)
+                print('{}, local acc: {:.2f}, local loss: {:.2f}'.format(num, acc_test,loss_test))
+                num = num + 1
+                loss_locals.append(copy.deepcopy(loss))
+            # update global gradients
+            grads_global = FedSGD(grad_info)
+            # copy weight to net_glob
+            if args.optimizer == 'sgd':
+                optimizer = torch.optim.SGD(net_glob.parameters(), lr=args.lr, momentum=args.momentum)
+            elif args.optimizer == 'adam':
+                optimizer = torch.optim.Adam(net_glob.parameters(), lr=args.lr, betas=(0.99,0.9))
             else:
-                local = LocalUpdate(args=args, attack_state=False, dataset=dataset_train, idxs=dict_users[idx])
-            grads, loss = local.train_grad(net=copy.deepcopy(net_glob).to(args.device))
-            grad_info.append(grads)
-            w = local.eval_local_model(net=copy.deepcopy(net_glob).to(args.device), grad=grads)
-            net_tmp.load_state_dict(w)
-            acc_test, loss_test = test_img(net_tmp, dataset_test, args)
-            print('{}, local acc: {:.2f}, local loss: {:.2f}'.format(num,acc_test,loss_test))
-            num = num + 1
-            #if args.all_clients:
-                #w_locals[idx] = copy.deepcopy(w)
-            #else:
-                #w_locals.append(copy.deepcopy(w))
-            loss_locals.append(copy.deepcopy(loss))
-        # update global weights
-        #w_glob = FedAvg(w_locals)
-        # update global gradients
-        grads_global = FedSGD(grad_info)
-        # copy weight to net_glob
-        #net_glob.load_state_dict(w_glob)
-        optimizer = torch.optim.SGD(net_glob.parameters(), lr=args.lr, momentum=args.momentum)
-        net_glob.train()
-        optimizer.zero_grad()
-        for k, v in net_glob.named_parameters():
-            v.grad = grads_global[k]
-        optimizer.step()
+                print('Error: There is no such optimizer ! ! !')
+            net_glob.train()
+            optimizer.zero_grad()
+            for k, v in net_glob.named_parameters():
+                v.grad = grads_global[k]
+            optimizer.step()
 
-        # print loss
-        loss_avg = sum(loss_locals) / len(loss_locals)
-        print('Round {:3d}, Average loss {:.3f}'.format(iter, loss_avg))
-        loss_train.append(loss_avg)
-        # testing
-        net_glob.eval()
-        acc_train, _ = test_img(net_glob, dataset_train, args)
-        acc_test, loss_test = test_img(net_glob, dataset_test, args)
-        print("Training accuracy: {:.2f}".format(acc_train))
-        print("Training accuracy: {:.2f}".format(_))
-        print("Testing accuracy: {:.2f}".format(acc_test))
-        print("Testing loss: {:.2f}".format(loss_test))
-'''
-    # plot loss curve
-    plt.figure()
-    plt.plot(range(len(loss_train)), loss_train)
-    plt.ylabel('train_loss')
-    plt.savefig('./save/fed_{}_{}_{}_C{}_iid{}.png'.format(args.dataset, args.model, args.epochs, args.frac, args.iid))
-
-    # testing
-    net_glob.eval()
-    acc_train, loss_train = test_img(net_glob, dataset_train, args)
-    acc_test, loss_test = test_img(net_glob, dataset_test, args)
-    print("Training accuracy: {:.2f}".format(acc_train))
-    print("Testing accuracy: {:.2f}".format(acc_test))
-'''
+            # print loss
+            loss_avg = sum(loss_locals) / len(loss_locals)
+            print('Round {:3d}, Average loss {:.3f}'.format(iter, loss_avg))
+            loss_train.append(loss_avg)
+            # testing
+            net_glob.eval()
+            acc_train, _ = test_img(net_glob, dataset_train, args)
+            acc_test, loss_test = test_img(net_glob, dataset_test, args)
+            print("Training accuracy: {:.2f}".format(acc_train))
+            print("Training accuracy: {:.2f}".format(_))
+            print("Testing accuracy: {:.2f}".format(acc_test))
+            print("Testing loss: {:.2f}".format(loss_test))
+    elif args.a_method == 'fedavg':
+        grads_local = []
+        for iter in range(args.epochs):
+            loss_locals = []
+            if not args.all_clients:
+                w_locals = []
+            m = max(int(args.frac * args.num_users), 1)
+            idxs_users = np.random.choice(range(args.num_users), m, replace=False)
+            # choose some clients to order
+            # n = max(int(args.frc_order * args.num_users), 1)
+            # idxs_order_users = np.random.choice(range(args.num_users), len(idxs_users), replace=False)
+            num = 0
+            for idx in idxs_users:
+                if num in atk_client and iter>0:
+                    print("begin to attack ! ! !")
+                    local = LocalUpdate(args=args, attack_state=True,
+                                        net=copy.deepcopy(net_glob).to(args.device),
+                                        dataset=dataset_train, idxs=dict_users[idx],grads_global=grads_global)
+                else:
+                    local = LocalUpdate(args=args, attack_state=False, dataset=dataset_train, idxs=dict_users[idx])
+                w, grad,loss = local.train(net=copy.deepcopy(net_glob).to(args.device), surrogate=False)
+                net_tmp.load_state_dict(w)
+                net_tmp.eval()
+                acc_test, loss_test = test_img(net_tmp, dataset_test, args)
+                print('{}, local acc: {:.2f}, local loss: {:.2f}'.format(num, acc_test, loss_test))
+                num = num + 1
+                if args.all_clients:
+                    w_locals[idx] = copy.deepcopy(w)
+                    grads_local.append(grad)
+                else:
+                    w_locals.append(copy.deepcopy(w))
+                    grads_local.append(grad)
+                loss_locals.append(copy.deepcopy(loss))
+            # update global weights
+            w_glob = FedAvg(w_locals)
+            grads_global = FedSGD(grads_local)
+            #print(grads_global)
+            # copy weight to net_glob
+            net_glob.load_state_dict(w_glob)
+            # print loss
+            loss_avg = sum(loss_locals) / len(loss_locals)
+            print('Round {:3d}, Average loss {:.3f}'.format(iter, loss_avg))
+            loss_train.append(loss_avg)
+            # testing
+            net_glob.eval()
+            acc_train, _ = test_img(net_glob, dataset_train, args)
+            acc_test, loss_test = test_img(net_glob, dataset_test, args)
+            print("Training accuracy: {:.2f}".format(acc_train))
+            print("Training accuracy: {:.2f}".format(_))
+            print("Testing accuracy: {:.2f}".format(acc_test))
+            print("Testing loss: {:.2f}".format(loss_test))
+    else:
+        print('Error: There is no such aggregation ! ! !')
