@@ -39,16 +39,25 @@ class LocalUpdate(object):
             idx = self.reorder_by_loss(net=net, attack_type=self.args.attack_type, ATK=self.args.atk,grads_global=grads_global)
             reorder_idxs = []
             idxs = list(idxs)
-            for i in idx:
-                reorder_idxs.extend(idxs[i*self.args.local_bs:i*self.args.local_bs+self.args.local_bs])
+            #print(idx)
+            worse_idx = idx[:1]
+            #for i in idx:
+            for i in range(len(idx)):
+                k = i%len(worse_idx)
+                reorder_idxs.extend(idxs[worse_idx[k]*self.args.local_bs:worse_idx[k]*self.args.local_bs+self.args.local_bs])
+                #print(reorder_idxs)
                 # 1.14 change
                 #idx = reorder_idxs
                 #self.idxs = idx
             self.ldr_train = DataLoader(DatasetSplit(dataset, reorder_idxs), batch_size=self.args.local_bs, shuffle=False)
         elif attack_state and self.args.attack_type == 'reshuffle':
             idx = self.reorder_by_loss(net=net, attack_type=self.args.attack_type, ATK=self.args.atk,grads_global=grads_global)
-            #self.idxs = idx
-            self.ldr_train = DataLoader(DatasetSplit(dataset, idx), batch_size=self.args.local_bs, shuffle=False)
+            # self.idxs = idx
+            tmp = idx[:1 * self.args.local_bs]
+            idxs = []
+            for i in range(len(idx)):
+                idxs.append(tmp[i % len(tmp)])
+            self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=self.args.local_bs, shuffle=False)
 
 
     def train(self, net, surrogate):
@@ -141,21 +150,22 @@ class LocalUpdate(object):
 
 
     def reorder_by_loss(self, net, attack_type, ATK, grads_global):
-        if self.args.optimizer == 'sgd':
-            optimizer = torch.optim.SGD(net.parameters(), lr=self.args.lr, momentum=self.args.momentum)
-        else:
-            optimizer = torch.optim.Adam(net.parameters(), lr=self.args.lr, betas=(0.99, 0.9))
         if attack_type == 'reorder':
             #net.eval()
             batch_similar = []
             for batch_idx, (images, labels) in enumerate(self.ldr_train):
-                net_temp = net
+                net_temp = copy.deepcopy(net)
+                #if self.args.optimizer == 'sgd':
+                #    optimizer = torch.optim.SGD(net_temp.parameters(), lr=self.args.lr,
+                #                               momentum=self.args.momentum)  # ,weight_decay=self.args.weight_decay
+                #else:
+                #    optimizer = torch.optim.Adam(net_temp.parameters(), lr=self.args.lr, betas=(0.99, 0.9))
                 images, labels = images.to(self.args.device), labels.to(self.args.device)
                 net_temp.zero_grad()
-                log_probs = net(images)
+                log_probs = net_temp(images)
                 loss = self.loss_func(log_probs, labels)
                 loss.backward()
-                optimizer.step()
+                #optimizer.step()
                 grads_change = {'named_grads': {}}
                 name_list = []
                 for name, param in net_temp.named_parameters():
@@ -163,6 +173,7 @@ class LocalUpdate(object):
                         name_list.append(name)
                         grads_change['named_grads'][name] = param.grad
                 #print(grads_change)
+
                 batch_similar.append(self.get_similarity(name_list, grads_global, grads_change).item())
             #print(batch_similar)
             if ATK == 'oscillating_out':
@@ -196,17 +207,27 @@ class LocalUpdate(object):
                         sort_idxs = sort_idxs[1:]
                 return new_idxs
         elif attack_type == 'reshuffle':
-            data_losses = []
+            data_similar = []
             for i in self.idxs:
+                net_temp = copy.deepcopy(net)
                 image, label = self.dataset[i]
                 image = image.reshape(1, image.shape[0], image.shape[1], image.shape[2])
                 label = torch.tensor([label])
                 image, label = image.to(self.args.device), label.to(self.args.device)
-                log_prob = net(image)
+                log_prob = net_temp(image)
+                net_temp.zero_grad()
                 loss = self.loss_func(log_prob, label)
-                data_losses.append(loss.item())
+                loss.backward()
+                grads_change = {'named_grads': {}}
+                name_list = []
+                for name, param in net_temp.named_parameters():
+                    if param.grad != None:
+                        name_list.append(name)
+                        grads_change['named_grads'][name] = param.grad
+                # print(grads_change)
+                data_similar.append(self.get_similarity(name_list, grads_global, grads_change).item())
             if ATK == 'oscillating_out':
-                sort_idxs = np.argsort(data_losses)  # low->high
+                sort_idxs = np.argsort(data_similar)  # low->high
                 sort_idxs = list(sort_idxs)
                 left = sort_idxs[:len(sort_idxs)//2][::-1]
                 right = sort_idxs[len(sort_idxs)//2:][::-1]
@@ -216,14 +237,14 @@ class LocalUpdate(object):
                 sort_idxs = new_idxs
             osc = False
             if ATK == 'lowhigh':
-                sort_idxs = np.argsort(data_losses)  # low->high
+                sort_idxs = np.argsort(data_similar)  # low->high
                 return list(sort_idxs)
             elif ATK == 'highlow':
-                sort_idxs = np.argsort(data_losses)  # low->high
+                sort_idxs = np.argsort(data_similar)  # low->high
                 return list(sort_idxs[::-1])
             elif ATK == 'oscillating_in' or 'oscillating_out':
                 if ATK == 'oscillating_in':
-                    sort_idxs = np.argsort(data_losses)
+                    sort_idxs = np.argsort(data_similar)
                     sort_idxs = list(sort_idxs)
                 new_idxs = []
                 while len(sort_idxs)>0:

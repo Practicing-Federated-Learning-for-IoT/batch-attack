@@ -6,6 +6,15 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+class LogisticRegression(nn.Module):
+    def __init__(self, input_shape, args):
+        super(LogisticRegression,self).__init__()
+        self.linear = torch.nn.Linear(input_shape, args.num_classes)
+
+    def forward(self, x):
+        x = x.view(-1,x.shape[1]*x.shape[2]*x.shape[3])
+        out = self.linear(x)
+        return out
 
 class LeNet5(nn.Module):  # nn.Module是所有神经网络的基类，我们自己定义任何神经网络，都要继承nn.Module
     def __init__(self, args):
@@ -50,7 +59,6 @@ class LeNet5(nn.Module):  # nn.Module是所有神经网络的基类，我们自�
         return x
 
 
-
 class RestNetBasicBlock(nn.Module):
     def __init__(self, in_channels, out_channels, stride):
         super(RestNetBasicBlock, self).__init__()
@@ -90,9 +98,9 @@ class RestNetDownBlock(nn.Module):
 
 
 class ResNet18(nn.Module):
-    def __init__(self):
+    def __init__(self,args):
         super(ResNet18, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3)
+        self.conv1 = nn.Conv2d(args.num_channels, 64, kernel_size=7, stride=2, padding=3)
         self.bn1 = nn.BatchNorm2d(64)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
